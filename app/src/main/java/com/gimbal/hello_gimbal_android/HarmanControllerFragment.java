@@ -1,11 +1,13 @@
 package com.gimbal.hello_gimbal_android;
 
+import android.app.Activity;
 import android.app.Fragment;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.gimbal.android.BeaconSighting;
@@ -42,19 +44,26 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
     private List<DeviceData> mDeviceDataList;
     private AudioCodecHandler mAudioCodecHandler;
     private int mTimeElapsed;
+    private String mCurrentMusicPath;
+    private Button mPlaybackButton;
 
     public HarmanControllerFragment() {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_main, container, false);
-    }
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
+        setRetainInstance(true);
+
+        // Set up the Gimbal beacon
+        final Activity activity = getActivity();
+        if (activity != null && activity.getApplication() != null) {
+            Gimbal.setApiKey(activity.getApplication(), GIMBAL_API_KEY);
+        } else {
+            Log.e(TAG, "application is null, unable to setApiKey for Gimbal");
+            throw new IllegalStateException("Could not Gimbal.seApiKey");
+        }
 
         mDeviceDataList = new ArrayList<>();
 
@@ -74,8 +83,8 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
             public void onVisitEnd(Visit visit) {
                 super.onVisitEnd(visit);
                 Log.v(TAG, "onVisitEnd: " + visit);
-                if (mMusicList != null && mMusicList.size() > 1) {
-                    togglePlayback(mMusicList.get(0).getUrl());
+                if (mCurrentMusicPath != null) {
+                    togglePlayback(mCurrentMusicPath);
                 }
             }
 
@@ -83,17 +92,16 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
             public void onVisitStart(Visit visit) {
                 super.onVisitStart(visit);
                 Log.v(TAG, "onVisitStart: " + visit);
-                if (mMusicList != null && mMusicList.size() > 1) {
-                    togglePlayback(mMusicList.get(0).getUrl());
+                if (mCurrentMusicPath != null) {
+                    togglePlayback(mCurrentMusicPath);
                 }
             }
         };
 
-        // Set up the Gimbal beacon
-        Gimbal.setApiKey(getActivity().getApplication(), GIMBAL_API_KEY);
         mPlaceManager = PlaceManager.getInstance();
         mPlaceManager.addListener(mPlaceEventListener);
         mPlaceManager.startMonitoring();
+
         CommunicationManager.getInstance().startReceivingCommunications();
 
         // Set up Harman/Kardon client
@@ -106,9 +114,6 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
 
         mHkWirelessHandler.registerHKWirelessControllerListener(this);
 
-        Log.v(TAG, "onActivityCreated: startRefreshDeviceInfo");
-        mHkWirelessHandler.startRefreshDeviceInfo();
-
         new Timer().schedule(new TimerTask() {
             @Override
             public void run() {
@@ -118,7 +123,10 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
                     @Override
                     public void run() {
                         Log.v(TAG, "device and music list retrieved, ready to play/pause");
-                        Toast.makeText(getActivity(), "Ready to play/pause music", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(
+                                getActivity(),
+                                "Ready to play/pause music",
+                                Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -126,8 +134,38 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
     }
 
     @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+        return inflater.inflate(R.layout.fragment_main, container, false);
+    }
+
+    @Override
+    public void onViewCreated(View view, Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+
+        mPlaybackButton = (Button) view.findViewById(R.id.playbackButton);
+        mPlaybackButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.v(TAG, "playback button clicked: ");
+                togglePlayback(mCurrentMusicPath);
+            }
+        });
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
+
+        if (mHkWirelessHandler != null) {
+            Log.v(TAG, "onResume: startRefreshDeviceInfo");
+            mHkWirelessHandler.startRefreshDeviceInfo();
+        }
     }
 
     private void getAvailableDevices() {
@@ -147,6 +185,11 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
 
     private void getMusicList() {
         mMusicList = MusicUtil.getMusicList(getActivity());
+
+        // TODO change this to allow user to select which music to play
+        if (mMusicList.size() > 0) {
+            mCurrentMusicPath = mMusicList.get(0).getUrl();
+        }
     }
 
     private void togglePlayback(final String path) {
@@ -179,11 +222,10 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
     public void onPause() {
         super.onPause();
 
-        Log.v(TAG, "onPause: stopping harman device refresh and removing from session");
-
         if (mHkWirelessHandler != null) {
+            Log.v(TAG, "onPause: startRefreshDeviceInfo");
             mHkWirelessHandler.stopRefreshDeviceInfo();
-            mHkWirelessHandler.removeDeviceFromSession(23983452403888L);
+//            mHkWirelessHandler.removeDeviceFromSession(23983452403888L);
         }
     }
 
@@ -206,12 +248,24 @@ public class HarmanControllerFragment extends Fragment implements HKWirelessList
                     break;
                 case EPlayerState_Play:
                     Log.v(TAG, "onPlaybackStateChanged:  PLAY");
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mPlaybackButton.setText(R.string.pause);
+                        }
+                    });
                     break;
                 case EPlayerState_Preparing:
                     Log.v(TAG, "onPlaybackStateChanged:  PREPARING");
                     break;
                 case EPlayerState_Pause:
                     Log.v(TAG, "onPlaybackStateChanged:  PAUSE");
+                    getActivity().runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mPlaybackButton.setText(R.string.play);
+                        }
+                    });
                     break;
                 case EPlayerState_Stop:
                     Log.v(TAG, "onPlaybackStateChanged:  STOP");
