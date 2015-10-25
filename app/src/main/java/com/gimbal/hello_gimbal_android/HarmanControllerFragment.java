@@ -1,5 +1,8 @@
 package com.gimbal.hello_gimbal_android;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ListFragment;
 import android.content.Context;
@@ -10,11 +13,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import com.gimbal.android.Attributes;
 import com.gimbal.android.BeaconSighting;
-import com.gimbal.android.CommunicationManager;
 import com.gimbal.android.Gimbal;
 import com.gimbal.android.Place;
 import com.gimbal.android.PlaceEventListener;
@@ -34,7 +37,9 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * A placeholder fragment containing a simple view.
+ * Displays data about Harmon devices and Gimbal beacons, as well as music playback.
+ * <p/>
+ * Beacon 1 ID: WX2H-8G2QB
  */
 public class HarmanControllerFragment extends ListFragment implements HKWirelessListener {
 
@@ -50,7 +55,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
     private AudioCodecHandler mAudioCodecHandler;
     private int mTimeElapsed;
     private String mCurrentMusicPath;
-    private Button mPlaybackButton;
+    private ImageButton mPlaybackButton;
     private int mVolume;
     private HcfAdapter mAdapter;
 
@@ -115,10 +120,11 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
         mPlaceManager.addListener(mPlaceEventListener);
         mPlaceManager.startMonitoring();
 
-        CommunicationManager.getInstance().startReceivingCommunications();
+        // TODO leave beacon notifications on?
+//        CommunicationManager.getInstance().startReceivingCommunications();
 
-        // Set up Harman/Kardon client
-        // Create a HKWControlHandler instance
+        // Set up Harman/Kardon client.
+        // Create a HKWControlHandler instance.
         mHkWirelessHandler = new HKWirelessHandler();
 
         // Initialize the HKWControlHandler and start wireless audio
@@ -171,7 +177,9 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 
         setListAdapter(mAdapter);
 
-        mPlaybackButton = (Button) view.findViewById(R.id.playbackButton);
+        getListView().setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+
+        mPlaybackButton = (ImageButton) view.findViewById(R.id.playbackButton);
         mPlaybackButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -204,6 +212,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             final DeviceObj deviceObj = mHkWirelessHandler.getDeviceInfoByIndex(ii);
             final DeviceData deviceData = new DeviceData(deviceObj, true);
             mDeviceDataList.add(deviceData);
+            mHkWirelessHandler.removeDeviceFromSession(deviceObj.deviceId);
             Log.v(TAG, "device: " + deviceData);
         }
 
@@ -233,10 +242,12 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 
         if (mAudioCodecHandler.isPlaying()) {
             Log.v(TAG, "pausing music");
-            mAudioCodecHandler.pause();
+            rampVolume(false);
+//            mAudioCodecHandler.pause();
         } else {
             Log.v(TAG, "playing music from: " + mTimeElapsed);
             mAudioCodecHandler.playCAFFromCertainTime(path, songName, mTimeElapsed);
+//            rampVolume(true);
         }
 
 //        File file = new File("/storage/emulated/legacy/amazonmp3/The_Submarines/Declare_A_New_State/B0045EBNGW_(disc_1)_03_-_Vote.mp3");
@@ -249,6 +260,42 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 //                "/mnt/shell/emulated/0/amazonmp3/Kate_Earl/Kate_Earl/B002L4BQWE_(disc_1)_07_-_Golden_Street.mp3",
 //                "B002L4BQWE_(disc_1)_07_-_Golden_Street.mp3",
 //                false);
+    }
+
+    private void rampVolume(boolean isUp) {
+        if (isUp) {
+            ValueAnimator animator = ValueAnimator.ofInt(5, mAudioCodecHandler.getMaximumVolumeLevel() / 2);
+            animator.setDuration(5000);
+            animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    final int value = (int) animation.getAnimatedValue();
+                    Log.v(TAG, "rampVolume UP: " + value);
+                    mAudioCodecHandler.setVolumeDevice(HACK2, value);
+                }
+            });
+            animator.setStartDelay(500);
+            animator.start();
+        } else {
+            ValueAnimator animator = ValueAnimator.ofInt(mAudioCodecHandler.getMaximumVolumeLevel() / 2, 5);
+            animator.setDuration(5000);
+            animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    final int value = (int) animation.getAnimatedValue();
+                    Log.v(TAG, "rampVolume DOWN: " + value);
+                    mAudioCodecHandler.setVolumeDevice(HACK2, value);
+                }
+            });
+            // when ramping volume down we must pause music at the end
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    mAudioCodecHandler.pause();
+                }
+            });
+            animator.start();
+        }
     }
 
     @Override
@@ -273,6 +320,9 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             mAdapter.addRow("Device update: "
                     + deviceId
                     + "\nReason: " + getDeviceUpdateReason(reason));
+        }
+        if (deviceId != HACK2) {
+            mHkWirelessHandler.removeDeviceFromSession(deviceId);
         }
     }
 
@@ -323,7 +373,8 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            mPlaybackButton.setText(R.string.pause);
+                            rampVolume(true);
+                            mPlaybackButton.setImageResource(android.R.drawable.ic_media_pause);
                         }
                     });
                     break;
@@ -337,7 +388,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            mPlaybackButton.setText(R.string.play);
+                            mPlaybackButton.setImageResource(android.R.drawable.ic_media_play);
                         }
                     });
                     break;
@@ -393,7 +444,8 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                         if (getActivity() != null && getListView() != null) {
                             add(text);
                             notifyDataSetChanged();
-                            getListView().invalidateViews();
+                            notifyDataSetInvalidated();
+                            getListView().smoothScrollToPosition(getCount() - 1);
                         }
                     }
                 });
