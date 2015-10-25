@@ -6,14 +6,15 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ListFragment;
 import android.content.Context;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
+import android.widget.BaseAdapter;
 import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.gimbal.android.Attributes;
@@ -32,7 +33,9 @@ import com.harman.hkwirelessapi.HKWirelessListener;
 import com.jasontoradler.harmankardoncontroller.R;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -51,12 +54,13 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
     private PlaceManager mPlaceManager;
     private PlaceEventListener mPlaceEventListener;
     private List<MusicUtil.Mp3Info> mMusicList;
-    private List<DeviceData> mDeviceDataList;
+    private Map<Long, DeviceData> mDeviceDataList;
     private AudioCodecHandler mAudioCodecHandler;
+    private int mPlayingSongPosition;
     private int mTimeElapsed;
-    private String mCurrentMusicPath;
     private ImageButton mPlaybackButton;
-    private int mVolume;
+    private ImageButton mPrevButton;
+    private ImageButton mNextButton;
     private HcfAdapter mAdapter;
 
     public HarmanControllerFragment() {
@@ -79,7 +83,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             throw new IllegalStateException("Could not Gimbal.seApiKey");
         }
 
-        mDeviceDataList = new ArrayList<>();
+        mDeviceDataList = new HashMap<>();
 
         mAudioCodecHandler = new AudioCodecHandler();
 
@@ -97,10 +101,10 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             public void onVisitEnd(Visit visit) {
                 super.onVisitEnd(visit);
                 Log.v(TAG, "onVisitEnd: " + visit);
-                mAdapter.addRow("Beacon visit end: " + visit.getPlace().getName());
+//                mAdapter.addRow("Beacon visit end: " + visit.getPlace().getName());
                 logAttributes(visit);
-                if (mCurrentMusicPath != null) {
-                    togglePlayback(mCurrentMusicPath);
+                if (mPlayingSongPosition >= 0) {
+                    togglePlayback();
                 }
             }
 
@@ -108,10 +112,10 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             public void onVisitStart(Visit visit) {
                 super.onVisitStart(visit);
                 Log.v(TAG, "onVisitStart: " + visit);
-                mAdapter.addRow("Beacon visit start: " + visit.getPlace().getName());
+//                mAdapter.addRow("Beacon visit start: " + visit.getPlace().getName());
                 logAttributes(visit);
-                if (mCurrentMusicPath != null) {
-                    togglePlayback(mCurrentMusicPath);
+                if (mPlayingSongPosition >= 0) {
+                    togglePlayback();
                 }
             }
         };
@@ -142,6 +146,8 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                     @Override
                     public void run() {
                         Log.v(TAG, "device and music list retrieved, ready to play/pause");
+                        getActivity().findViewById(R.id.progress).setVisibility(View.INVISIBLE);
+                        getListView().setVisibility(View.VISIBLE);
                         Toast.makeText(
                                 getActivity(),
                                 "Ready to play/pause music",
@@ -149,7 +155,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                     }
                 });
             }
-        }, 3000);
+        }, 1000);
     }
 
     private void logAttributes(final Visit visit) {
@@ -184,7 +190,37 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             @Override
             public void onClick(View v) {
                 Log.v(TAG, "playback button clicked: ");
-                togglePlayback(mCurrentMusicPath);
+                togglePlayback();
+            }
+        });
+
+        mPrevButton = (ImageButton) view.findViewById(R.id.previousButton);
+        mPrevButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mPlayingSongPosition > 0) {
+                    togglePlayback();
+                    mAdapter.setSongPlaying(mPlayingSongPosition, false);
+                    --mPlayingSongPosition;
+                    mAdapter.setSongPlaying(mPlayingSongPosition, true);
+                    mTimeElapsed = 0;
+                    togglePlayback();
+                }
+            }
+        });
+
+        mNextButton = (ImageButton) view.findViewById(R.id.nextButton);
+        mNextButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mPlayingSongPosition < mMusicList.size() - 1) {
+                    togglePlayback();
+                    mAdapter.setSongPlaying(mPlayingSongPosition, false);
+                    ++mPlayingSongPosition;
+                    mAdapter.setSongPlaying(mPlayingSongPosition, true);
+                    mTimeElapsed = 0;
+                    togglePlayback();
+                }
             }
         });
     }
@@ -206,12 +242,11 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 
     private void getAvailableDevices() {
         int deviceCount = mHkWirelessHandler.getDeviceCount();
-        mDeviceDataList.clear();
         Log.v(TAG, "device count: " + deviceCount);
         for (int ii = 0; ii < deviceCount; ++ii) {
             final DeviceObj deviceObj = mHkWirelessHandler.getDeviceInfoByIndex(ii);
             final DeviceData deviceData = new DeviceData(deviceObj, true);
-            mDeviceDataList.add(deviceData);
+            mDeviceDataList.put(deviceObj.deviceId, deviceData);
             mHkWirelessHandler.removeDeviceFromSession(deviceObj.deviceId);
             Log.v(TAG, "device: " + deviceData);
         }
@@ -223,22 +258,35 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
     private void getMusicList() {
         mMusicList = MusicUtil.getMusicList(getActivity());
 
-        // TODO change this to allow user to select which music to play
-        if (mMusicList.size() > 0) {
-            mCurrentMusicPath = mMusicList.get(1).getUrl();
-            mAdapter.addRow("Music: " + getSong(mCurrentMusicPath));
+        for (final MusicUtil.Mp3Info mp3Info : mMusicList) {
+            mAdapter.addRow(getSong(mp3Info));
+        }
+
+        if (!mMusicList.isEmpty()) {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mAdapter.setSongPlaying(0, true);
+                }
+            });
         }
     }
 
-    private String getSong(final String path) {
-        return path.substring(path.lastIndexOf("/") + 1);
+    private Song getSong(final MusicUtil.Mp3Info mp3Info) {
+        Song song = new Song();
+        song.mp3Info = mp3Info;
+        return song;
+//        return path.substring(path.lastIndexOf("/") + 1);
     }
 
-    private void togglePlayback(final String path) {
-        Log.v(TAG, "togglePlayback: " + path);
+    private void togglePlayback() {
+        final Song playingSong = (Song) mAdapter.getItem(mPlayingSongPosition);
+        if (playingSong == null || playingSong.mp3Info == null) {
+            return;
+        }
+        String title = playingSong.mp3Info.getTitle();
 
-        String songName = getSong(path);
-        Log.v(TAG, "  songName=" + songName);
+        Log.v(TAG, "togglePlayback: " + title);
 
         if (mAudioCodecHandler.isPlaying()) {
             Log.v(TAG, "pausing music");
@@ -246,7 +294,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 //            mAudioCodecHandler.pause();
         } else {
             Log.v(TAG, "playing music from: " + mTimeElapsed);
-            mAudioCodecHandler.playCAFFromCertainTime(path, songName, mTimeElapsed);
+            mAudioCodecHandler.playCAFFromCertainTime(playingSong.mp3Info.getUrl(), title, mTimeElapsed);
 //            rampVolume(true);
         }
 
@@ -311,15 +359,16 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 
     @Override
     public void onDeviceStateUpdated(long deviceId, int reason) {
-        Log.v(TAG, "onDeviceStateUpdated: deviceId=" + deviceId + ", reason=" + reason);
+//        Log.v(TAG, "onDeviceStateUpdated: deviceId=" + deviceId + ", reason=" + reason);
         final DeviceObj deviceObj = mHkWirelessHandler.findDeviceFromList(deviceId);
         final DeviceData deviceData = new DeviceData(deviceObj,
                 (reason == HKDeviceStatusReason.HKDeviceStatusReasonDeviceAvailable.ordinal()));
-        Log.v(TAG, "device: " + deviceData.toString());
+//        Log.v(TAG, "device: " + deviceData.toString());
         if (mAdapter != null && deviceId == HACK2) {
-            mAdapter.addRow("Device update: "
-                    + deviceId
-                    + "\nReason: " + getDeviceUpdateReason(reason));
+            Log.v(TAG, "onDeviceStateUpdated: deviceId=" + deviceId + ", reason=" + reason);
+//            mAdapter.addRow("Device update: "
+//                    + deviceId
+//                    + "\nReason: " + getDeviceUpdateReason(reason));
         }
         if (deviceId != HACK2) {
             mHkWirelessHandler.removeDeviceFromSession(deviceId);
@@ -365,11 +414,11 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             switch (playerState) {
                 case EPlayerState_Init:
                     Log.v(TAG, "onPlaybackStateChanged:  INIT");
-                    mAdapter.addRow("Playback INIT");
+//                    mAdapter.addRow("Playback INIT");
                     break;
                 case EPlayerState_Play:
                     Log.v(TAG, "onPlaybackStateChanged:  PLAY");
-                    mAdapter.addRow("Playback PLAY");
+//                    mAdapter.addRow("Playback PLAY");
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -380,11 +429,11 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                     break;
                 case EPlayerState_Preparing:
                     Log.v(TAG, "onPlaybackStateChanged:  PREPARING");
-                    mAdapter.addRow("Playback PREPARING");
+//                    mAdapter.addRow("Playback PREPARING");
                     break;
                 case EPlayerState_Pause:
                     Log.v(TAG, "onPlaybackStateChanged:  PAUSE");
-                    mAdapter.addRow("Playback PAUSE");
+//                    mAdapter.addRow("Playback PAUSE");
                     getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -394,7 +443,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
                     break;
                 case EPlayerState_Stop:
                     Log.v(TAG, "onPlaybackStateChanged:  STOP");
-                    mAdapter.addRow("Playback STOP");
+//                    mAdapter.addRow("Playback STOP");
                     break;
             }
         } else {
@@ -405,13 +454,13 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
     @Override
     public void onVolumeLevelChanged(long deviceId, int deviceVolume, int avgVolume) {
         Log.v(TAG, "onVolumeLevelChanged: deviceId=" + deviceId + " deviceVolume=" + deviceVolume + ", avgVolume=" + avgVolume);
-        mAdapter.addRow("Volume changed: " + deviceVolume);
+//        mAdapter.addRow("Volume changed: " + deviceVolume);
     }
 
     @Override
     public void onPlayEnded() {
         Log.v(TAG, "onPlayEnded");
-        mAdapter.addRow("Play ended");
+//        mAdapter.addRow("Play ended");
         mTimeElapsed = 0;
     }
 
@@ -424,32 +473,87 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
     @Override
     public void onErrorOccurred(int errorCode, String errorMsg) {
         Log.v(TAG, "onErrorOccurred: errorCode=" + errorCode + ", errorMsg=" + errorMsg);
-        mAdapter.addRow("Error occurred: " + errorMsg);
+//        mAdapter.addRow("Error occurred: " + errorMsg);
+    }
+
+    private class Song {
+        public MusicUtil.Mp3Info mp3Info;
+        public boolean isPlaying;
+        public long duration;
     }
 
     /**
      * Adapter for our list view. Convenience method to add row in UI thread.
      */
-    private class HcfAdapter extends ArrayAdapter<String> {
+    private class HcfAdapter extends BaseAdapter {
+
+        private List<Song> data;
+
         public HcfAdapter(final Context context) {
-            super(context, android.R.layout.simple_list_item_1);
+//            super(context, android.R.layout.simple_list_item_1);
+            data = new ArrayList<>();
         }
 
-        public void addRow(final String text) {
+        public void setSongPlaying(int position, boolean isPlaying) {
+            if (position >= 0 && position < data.size()) {
+                Log.v(TAG, "setSongPlaying: " + position + " " + isPlaying);
+                data.get(position).isPlaying = isPlaying;
+                notifyDataSetChanged();
+            }
+        }
+
+        public void addRow(final Song song) {
             final Activity activity = getActivity();
             if (activity != null && !activity.isFinishing()) {
                 activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         if (getActivity() != null && getListView() != null) {
-                            add(text);
+                            data.add(song);
                             notifyDataSetChanged();
-                            notifyDataSetInvalidated();
-                            getListView().smoothScrollToPosition(getCount() - 1);
                         }
                     }
                 });
             }
+        }
+
+        @Override
+        public int getCount() {
+            return data.size();
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return data.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            View view;
+            if (convertView == null) {
+                view = getActivity().getLayoutInflater().inflate(
+                        android.R.layout.simple_list_item_1, parent, false);
+            } else {
+                view = convertView;
+            }
+
+            final Song song = data.get(position);
+            if (song != null) {
+                final TextView textView = (TextView) view.findViewById(android.R.id.text1);
+                textView.setText(song.mp3Info.getTitle());
+                if (song.isPlaying) {
+                    view.setBackgroundColor(Color.CYAN);
+                } else {
+                    view.setBackgroundColor(Color.WHITE);
+                }
+            }
+
+            return view;
         }
     }
 }

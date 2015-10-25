@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     tools:context=".MainActivityFragment">
 
-    <FrameLayout
+    <RelativeLayout
         android:id="@+id/footer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -13,15 +13,44 @@
         android:background="#ff808080">
 
         <ImageButton
+            android:id="@+id/previousButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentLeft="true"
+            android:layout_centerVertical="true"
+            android:layout_marginBottom="8dp"
+            android:layout_marginLeft="8dp"
+            android:layout_marginTop="8dp"
+            android:src="@android:drawable/ic_media_previous"/>
+
+        <ImageButton
             android:id="@+id/playbackButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
+            android:layout_centerInParent="true"
             android:layout_marginBottom="8dp"
             android:layout_marginTop="8dp"
             android:src="@android:drawable/ic_media_play"/>
 
-    </FrameLayout>
+        <ImageButton
+            android:id="@+id/nextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_centerVertical="true"
+            android:layout_marginBottom="8dp"
+            android:layout_marginRight="8dp"
+            android:layout_marginTop="8dp"
+            android:src="@android:drawable/ic_media_next"/>
+
+    </RelativeLayout>
+
+    <ProgressBar
+        android:id="@+id/progress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:visibility="visible"/>
 
     <ListView
         android:id="@android:id/list"
@@ -29,9 +58,11 @@
         android:layout_height="match_parent"
         android:layout_above="@id/footer"
         android:layout_alignParentTop="true"
+        android:cacheColorHint="@android:color/transparent"
         android:paddingBottom="@dimen/activity_vertical_margin"
         android:paddingLeft="@dimen/activity_horizontal_margin"
         android:paddingRight="@dimen/activity_horizontal_margin"
-        android:paddingTop="@dimen/activity_vertical_margin"/>
+        android:paddingTop="@dimen/activity_vertical_margin"
+        android:visibility="invisible"/>
 
 </RelativeLayout>

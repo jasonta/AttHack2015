@@ -37,9 +37,12 @@ public class MusicUtil {
                     long id = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
                     String title = cursor.getString((cursor.getColumnIndex(MediaStore.Audio.Media.TITLE)));
                     String url = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.DATA));
-                    Log.v(TAG, "music: " + url + File.pathSeparator + title);
+                    long duration = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.AudioColumns.DURATION));
+//                    Log.v(TAG, "music: " + url);
                     int isMusic = cursor.getInt(cursor.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC));
                     if (isMusic != 0 && isMp3Type(url)) {
+                        Log.v(TAG, "mp3: " + url);
+                        Log.v(TAG, "  duration: " + duration);
                         mp3Info.setId(id);
                         mp3Info.setTitle(title);
                         mp3Info.setUrl(url);
