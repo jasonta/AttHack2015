@@ -1,9 +1,0 @@
-<component name="libraryTable">
-  <library name="HKWirelessHD">
-    <CLASSES>
-      <root url="jar://$PROJECT_DIR$/app/src/main/libs/HKWirelessHD.jar!/" />
-    </CLASSES>
-    <JAVADOC />
-    <SOURCES />
-  </library>
-</component>
