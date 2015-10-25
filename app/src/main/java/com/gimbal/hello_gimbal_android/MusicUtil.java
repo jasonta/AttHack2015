@@ -19,6 +19,9 @@ public class MusicUtil {
 
     public static List<Mp3Info> getMusicList(final Context context) {
         List<Mp3Info> mp3Infos = new ArrayList<>();
+        if (context == null) {
+            return mp3Infos;
+        }
         Cursor cursor = null;
         try {
             cursor = context.getContentResolver().query(

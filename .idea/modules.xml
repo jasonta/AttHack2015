@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/HarmanKardonController.iml" filepath="$PROJECT_DIR$/HarmanKardonController.iml" />
+      <module fileurl="file://$PROJECT_DIR$/AttHack2015.iml" filepath="$PROJECT_DIR$/AttHack2015.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>
