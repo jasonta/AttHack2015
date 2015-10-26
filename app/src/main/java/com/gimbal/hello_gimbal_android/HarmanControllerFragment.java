@@ -312,7 +312,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
 
     private void rampVolume(boolean isUp) {
         if (isUp) {
-            ValueAnimator animator = ValueAnimator.ofInt(5, mAudioCodecHandler.getMaximumVolumeLevel() / 2);
+            ValueAnimator animator = ValueAnimator.ofInt(5, mAudioCodecHandler.getMaximumVolumeLevel() * 0.8f);
             animator.setDuration(5000);
             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 @Override
@@ -325,7 +325,7 @@ public class HarmanControllerFragment extends ListFragment implements HKWireless
             animator.setStartDelay(500);
             animator.start();
         } else {
-            ValueAnimator animator = ValueAnimator.ofInt(mAudioCodecHandler.getMaximumVolumeLevel() / 2, 5);
+            ValueAnimator animator = ValueAnimator.ofInt(mAudioCodecHandler.getMaximumVolumeLevel() * 0.8f, 5);
             animator.setDuration(5000);
             animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 @Override

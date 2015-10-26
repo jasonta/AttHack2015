@@ -11,6 +11,9 @@
 # IDEA files
 .idea/
 
+# Mac-specific unrelated files
+**/.DS_Store
+
 # Generated files
 bin/
 gen/
